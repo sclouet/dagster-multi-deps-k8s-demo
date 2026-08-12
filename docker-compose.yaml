@@ -79,6 +79,13 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  # --- Whisper : outil autonome (calcul de trim avion), pas de wiring
+  #     Dagster - tourne juste sa demo (`python -m whisper`) puis s'arrete.
+
+  whisper:
+    build:
+      context: ./tools/whisper
+
   # --- Orchestrateur central : ne connait aucune dependance "outil" ---
 
   dagster-webserver:

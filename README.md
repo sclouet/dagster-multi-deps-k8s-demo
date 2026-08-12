@@ -76,6 +76,8 @@ Tester :
 - `python tools/whisper/examples/example_sweep.py` (même principe, mais boucle sur l'altitude, la vitesse et la masse au décollage — un `run_trim()` par combinaison, donc `out_1.csv` … `out_27.csv`)
 - ou `docker build -t whisper tools/whisper && docker run --rm whisper`
 
+Whisper est aussi un service `docker-compose.yaml` (`whisper`) : `docker compose run --rm whisper` le construit/lance à la demande, ou il tourne une fois puis s'arrête proprement (code 0) lors d'un `docker compose up` complet — sans wiring Dagster, donc sans impact sur le reste de la stack.
+
 ### example_sweep_dagster.py : le même balayage, en parallèle via Dagster
 
 `pip install tools/whisper/.[dagster]` puis `python tools/whisper/examples/example_sweep_dagster.py` exécute le même balayage 3×3×3 que `example_sweep.py`, mais chaque combinaison devient un **op Dagster** et le job utilise l'**executor multiprocess** : les 27 calculs tournent en parallèle sur plusieurs process (confirmé par les PID distincts dans les logs Dagster), au lieu d'une boucle séquentielle.
