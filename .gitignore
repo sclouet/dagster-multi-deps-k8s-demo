@@ -14,8 +14,9 @@ storage/
 # Docker / k8s local
 .env
 
-# Whisper - sortie generee par examples/example_usage.py
+# Whisper - sortie generee par les scripts d'exemple
 tools/whisper/examples/out/
+tools/whisper/examples/out_dagster/
 
 # OS
 .DS_Store

@@ -47,9 +47,9 @@ Dagster permet de garder plusieurs **code locations** dans un seul déploiement 
 
 Les données elles-mêmes transitent par **MinIO** (S3-compatible), via `S3PickleIOManager` de `dagster-aws`, configuré à l'identique dans les 3 outils (mêmes variables d'environnement). C'est ce qui évite d'avoir à partager un filesystem entre pods (`ReadWriteMany`), problématique hors cluster mono-nœud.
 
-## Whisper : 4e outil, autonome (pas de wiring Dagster)
+## Whisper : 4e outil, autonome (pas de code location Dagster)
 
-`tools/whisper/` est un outil de calcul de trim avion, indépendant du pipeline `ingest → enrich → score` ci-dessus (autre domaine, pas encore branché sur Dagster). Il illustre la même isolation par outil (son propre `Dockerfile`/`pyproject.toml`), mais sans dépendance tierce — stdlib uniquement.
+`tools/whisper/` est un outil de calcul de trim avion, indépendant du pipeline `ingest → enrich → score` ci-dessus (autre domaine, pas de code location/asset Dagster). Il illustre la même isolation par outil (son propre `Dockerfile`/`pyproject.toml`), mais sans dépendance tierce — stdlib uniquement. Dagster est utilisé ponctuellement dans `example_sweep_dagster.py` (voir plus bas) comme simple bibliothèque d'exécution parallèle, pas comme orchestrateur déployé.
 
 Sa classe principale, `Whisper`, est un **singleton** (`Whisper()` renvoie toujours la même instance dans un process) qui expose une API de préparation de données puis de calcul :
 
@@ -76,6 +76,14 @@ Tester :
 - `python tools/whisper/examples/example_sweep.py` (même principe, mais boucle sur l'altitude, la vitesse et la masse au décollage — un `run_trim()` par combinaison, donc `out_1.csv` … `out_27.csv`)
 - ou `docker build -t whisper tools/whisper && docker run --rm whisper`
 
+### example_sweep_dagster.py : le même balayage, en parallèle via Dagster
+
+`pip install tools/whisper/.[dagster]` puis `python tools/whisper/examples/example_sweep_dagster.py` exécute le même balayage 3×3×3 que `example_sweep.py`, mais chaque combinaison devient un **op Dagster** et le job utilise l'**executor multiprocess** : les 27 calculs tournent en parallèle sur plusieurs process (confirmé par les PID distincts dans les logs Dagster), au lieu d'une boucle séquentielle.
+
+Deux points liés au fait que `Whisper` est un singleton :
+- L'executor multiprocess exige une `DagsterInstance` **non-éphémère** (les process enfants doivent partager le même stockage de run) — le script utilise `DagsterInstance.local_temp()`.
+- Chaque op tourne dans son propre process, donc sa propre instance `Whisper` (compteur d'appel reparti à 1) : sans précaution, les 27 ops écriraient tous un `out_1.csv` dans le même dossier. Le script donne donc un sous-dossier de sortie distinct par combinaison (`out_dagster/run_trim_<i>/out_1.csv`), sans modifier l'API de `Whisper`.
+
 ## Structure du projet
 
 ```
@@ -83,7 +91,7 @@ tools/tool_ingest/   tools/tool_enrich/   tools/tool_score/
     Dockerfile, pyproject.toml, <package>/{__init__,logic,definitions}.py
 tools/whisper/         # outil autonome (voir section Whisper ci-dessus)
     Dockerfile, pyproject.toml, whisper/{__init__,core,trim,__main__}.py
-    examples/{aircraft_example.xml, example_usage.py}
+    examples/{aircraft_example.xml, example_usage.py, example_sweep.py, example_sweep_dagster.py}
 orchestrator/         # image webserver+daemon (aucune dépendance "outil")
 workspace.yaml         # docker-compose : pointe vers les 3 serveurs gRPC
 dagster.yaml            # instance docker-compose (sqlite, run launcher par défaut)
