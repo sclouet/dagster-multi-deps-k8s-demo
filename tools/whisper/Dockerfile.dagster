@@ -1,0 +1,20 @@
+# Variante de l'image whisper avec l'extra [dagster] installe, pour
+# executer examples/example_sweep_dagster.py connecte a l'instance Dagster
+# persistante partagee (DAGSTER_HOME) plutot qu'une instance jetable -
+# separee du Dockerfile principal pour que l'image whisper "de base" reste
+# sans dependance tierce.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY whisper ./whisper
+COPY examples ./examples
+
+# dagster==1.8.13 fige explicitement : DOIT matcher la version utilisee par
+# le webserver/daemon (orchestrator/requirements.txt) puisque ce conteneur
+# ecrit dans le MEME stockage d'instance partage (DAGSTER_HOME) - une
+# version differente risquerait une incompatibilite de schema.
+RUN pip install --no-cache-dir . "dagster==1.8.13"
+
+CMD ["python", "examples/example_sweep_dagster.py"]

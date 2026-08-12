@@ -86,6 +86,21 @@ services:
     build:
       context: ./tools/whisper
 
+  # Variante avec Dagster (extra [dagster]) : lance example_sweep_dagster.py
+  # connecte a la MEME instance que le webserver/daemon (DAGSTER_HOME
+  # partage), pour que ses runs apparaissent dans l'UI Dagster.
+  whisper-sweep-dagster:
+    build:
+      context: ./tools/whisper
+      dockerfile: Dockerfile.dagster
+    environment:
+      DAGSTER_HOME: /dagster_home
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      - dagster-webserver
+      - dagster-daemon
+
   # --- Orchestrateur central : ne connait aucune dependance "outil" ---
 
   dagster-webserver:

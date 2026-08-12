@@ -83,8 +83,16 @@ Whisper est aussi un service `docker-compose.yaml` (`whisper`) : `docker compose
 `pip install tools/whisper/.[dagster]` puis `python tools/whisper/examples/example_sweep_dagster.py` exécute le même balayage 3×3×3 que `example_sweep.py`, mais chaque combinaison devient un **op Dagster** et le job utilise l'**executor multiprocess** : les 27 calculs tournent en parallèle sur plusieurs process (confirmé par les PID distincts dans les logs Dagster), au lieu d'une boucle séquentielle.
 
 Deux points liés au fait que `Whisper` est un singleton :
-- L'executor multiprocess exige une `DagsterInstance` **non-éphémère** (les process enfants doivent partager le même stockage de run) — le script utilise `DagsterInstance.local_temp()`.
+- L'executor multiprocess exige une `DagsterInstance` **non-éphémère** (les process enfants doivent partager le même stockage de run).
 - Chaque op tourne dans son propre process, donc sa propre instance `Whisper` (compteur d'appel reparti à 1) : sans précaution, les 27 ops écriraient tous un `out_1.csv` dans le même dossier. Le script donne donc un sous-dossier de sortie distinct par combinaison (`out_dagster/run_trim_<i>/out_1.csv`), sans modifier l'API de `Whisper`.
+
+**Quelle instance Dagster ?** Par défaut (exécution autonome sur le poste), le script utilise `DagsterInstance.local_temp()` — une instance jetable, invisible en dehors du process. Mais si la variable d'environnement `DAGSTER_HOME` est définie, il bascule sur `DagsterInstance.get()` et écrit dans **cette** instance : c'est ce que fait le service docker-compose `whisper-sweep-dagster` (build via `tools/whisper/Dockerfile.dagster`, `DAGSTER_HOME=/dagster_home` partagé avec le webserver/daemon), pour que le run apparaisse dans l'UI Dagster :
+
+```powershell
+docker compose run --rm whisper-sweep-dagster
+```
+
+Puis ouvrir http://localhost:3000/runs : le run `whisper_sweep_job` y apparaît (27 steps en succès), aux côtés de `raw_orders`/`enriched_orders_job`/`scored_orders_job`. `Dockerfile.dagster` fige `dagster==1.8.13` (au lieu de la plage `>=1.8,<2` du extra `pyproject.toml`) — cette version **doit** matcher exactement celle du webserver/daemon (`orchestrator/requirements.txt`), car ce conteneur écrit directement dans le même stockage de run partagé ; une version différente risquerait une incompatibilité de schéma.
 
 ## Structure du projet
 
@@ -92,7 +100,8 @@ Deux points liés au fait que `Whisper` est un singleton :
 tools/tool_ingest/   tools/tool_enrich/   tools/tool_score/
     Dockerfile, pyproject.toml, <package>/{__init__,logic,definitions}.py
 tools/whisper/         # outil autonome (voir section Whisper ci-dessus)
-    Dockerfile, pyproject.toml, whisper/{__init__,core,trim,__main__}.py
+    Dockerfile, Dockerfile.dagster, pyproject.toml
+    whisper/{__init__,core,trim,__main__}.py
     examples/{aircraft_example.xml, example_usage.py, example_sweep.py, example_sweep_dagster.py}
 orchestrator/         # image webserver+daemon (aucune dépendance "outil")
 workspace.yaml         # docker-compose : pointe vers les 3 serveurs gRPC

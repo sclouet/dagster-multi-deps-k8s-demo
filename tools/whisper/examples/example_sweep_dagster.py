@@ -12,9 +12,18 @@ combinaison ecrit donc dans out_dagster/run_trim_<i>/out_1.csv.
 A executer depuis n'importe ou : `python example_sweep_dagster.py`.
 Necessite le package `dagster` (extra facultatif, voir pyproject.toml) :
     pip install dagster
+
+Instance Dagster utilisee :
+- Si DAGSTER_HOME est definie dans l'environnement (ex : service
+  docker-compose whisper-sweep-dagster, meme volume que le
+  webserver/daemon), les runs sont ecrits dans cette instance partagee et
+  apparaissent dans l'UI Dagster (http://localhost:3000/runs).
+- Sinon (execution autonome sur le poste), une instance jetable dans un
+  dossier temporaire est utilisee (comportement d'origine).
 """
 
 import itertools
+import os
 import sys
 from pathlib import Path
 
@@ -72,16 +81,27 @@ def whisper_sweep_job():
         run_trim_op()
 
 
-def main() -> None:
+def _dagster_instance():
     # L'executor multiprocess exige une instance non-ephemere (les process
-    # enfants doivent partager le meme stockage de run) : local_temp() cree
-    # une instance sur disque, dans un dossier temporaire auto-nettoye.
-    with DagsterInstance.local_temp() as instance:
+    # enfants doivent partager le meme stockage de run).
+    if os.environ.get("DAGSTER_HOME"):
+        # Instance partagee avec le webserver/daemon (DAGSTER_HOME) : les
+        # runs de ce script apparaissent dans l'UI Dagster.
+        return DagsterInstance.get()
+    # Execution autonome : instance sur disque, dans un dossier temporaire
+    # auto-nettoye, invisible en dehors de ce process.
+    return DagsterInstance.local_temp()
+
+
+def main() -> None:
+    with _dagster_instance() as instance:
         result = execute_job(reconstructable(whisper_sweep_job), instance=instance)
 
     print(f"Succes : {result.success}")
     print(f"{len(_COMBINATIONS)} calculs de trim lances en parallele (executor multiprocess).")
     print(f"Resultats dans {OUT_DIR}/run_trim_<i>/out_1.csv")
+    if os.environ.get("DAGSTER_HOME"):
+        print("Visible dans l'UI Dagster : http://localhost:3000/runs")
 
 
 if __name__ == "__main__":
