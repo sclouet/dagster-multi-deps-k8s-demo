@@ -101,6 +101,28 @@ services:
       - dagster-webserver
       - dagster-daemon
 
+  # Deux instances Whisper, chacune dans son propre container temporaire,
+  # qui echangent des donnees via un volume Docker partage (whisper_shared) :
+  # le producteur ecrit out_1.csv, le consommateur le lit et l'utilise comme
+  # base pour son propre calcul (voir examples/example_producer.py /
+  # example_consumer.py).
+  whisper-producer:
+    build:
+      context: ./tools/whisper
+    command: ["python", "examples/example_producer.py"]
+    volumes:
+      - whisper_shared:/shared
+
+  whisper-consumer:
+    build:
+      context: ./tools/whisper
+    command: ["python", "examples/example_consumer.py"]
+    volumes:
+      - whisper_shared:/shared
+    depends_on:
+      whisper-producer:
+        condition: service_completed_successfully
+
   # --- Orchestrateur central : ne connait aucune dependance "outil" ---
 
   dagster-webserver:
@@ -147,3 +169,4 @@ services:
 volumes:
   minio_data:
   dagster_home:
+  whisper_shared:

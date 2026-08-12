@@ -7,6 +7,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY whisper ./whisper
+COPY examples ./examples
 
 RUN pip install --no-cache-dir .
 
