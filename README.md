@@ -70,7 +70,10 @@ w.run_trim(save_data=False)              # calcule sans écrire de fichier
 
 `run_trim` lève une `RuntimeError` explicite si `load_aircraft`/`set_trim_condition`/`set_trim_param` n'ont pas été appelés au préalable. Le solveur de trim lui-même (`Whisper._solve_trim`) est un **stub** (calcul pseudo-aléatoire mais reproductible via `set_seek`) — à remplacer par le vrai calcul.
 
-Tester : `python -m whisper` (démo autonome, aucune dépendance) ou `docker build -t whisper tools/whisper && docker run --rm whisper`.
+Tester :
+- `python -m whisper` (démo autonome, génère son propre avion XML temporaire)
+- `python tools/whisper/examples/example_usage.py` (script d'exemple pas à pas : instancie `Whisper`, appelle `set_dir`, `set_seek`, `load_aircraft`, `set_trim_condition`, `set_trim_param`, `run_trim`, avec `tools/whisper/examples/aircraft_example.xml`)
+- ou `docker build -t whisper tools/whisper && docker run --rm whisper`
 
 ## Structure du projet
 
@@ -78,7 +81,8 @@ Tester : `python -m whisper` (démo autonome, aucune dépendance) ou `docker bui
 tools/tool_ingest/   tools/tool_enrich/   tools/tool_score/
     Dockerfile, pyproject.toml, <package>/{__init__,logic,definitions}.py
 tools/whisper/         # outil autonome (voir section Whisper ci-dessus)
-    Dockerfile, pyproject.toml, whisper/{__init__,core,trim,__main__}.py, examples/
+    Dockerfile, pyproject.toml, whisper/{__init__,core,trim,__main__}.py
+    examples/{aircraft_example.xml, example_usage.py}
 orchestrator/         # image webserver+daemon (aucune dépendance "outil")
 workspace.yaml         # docker-compose : pointe vers les 3 serveurs gRPC
 dagster.yaml            # instance docker-compose (sqlite, run launcher par défaut)
