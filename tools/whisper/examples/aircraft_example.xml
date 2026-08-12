@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Exemple de fichier avion pour Whisper.load_aircraft(). -->
+<aircraft name="example-aircraft">
+    <mass_kg>18000</mass_kg>
+    <wingspan_m>28.5</wingspan_m>
+</aircraft>

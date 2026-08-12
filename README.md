@@ -47,11 +47,38 @@ Dagster permet de garder plusieurs **code locations** dans un seul déploiement 
 
 Les données elles-mêmes transitent par **MinIO** (S3-compatible), via `S3PickleIOManager` de `dagster-aws`, configuré à l'identique dans les 3 outils (mêmes variables d'environnement). C'est ce qui évite d'avoir à partager un filesystem entre pods (`ReadWriteMany`), problématique hors cluster mono-nœud.
 
+## Whisper : 4e outil, autonome (pas de wiring Dagster)
+
+`tools/whisper/` est un outil de calcul de trim avion, indépendant du pipeline `ingest → enrich → score` ci-dessus (autre domaine, pas encore branché sur Dagster). Il illustre la même isolation par outil (son propre `Dockerfile`/`pyproject.toml`), mais sans dépendance tierce — stdlib uniquement.
+
+Sa classe principale, `Whisper`, est un **singleton** (`Whisper()` renvoie toujours la même instance dans un process) qui expose une API de préparation de données puis de calcul :
+
+```python
+from whisper import Whisper, TrimCondition, TrimParam
+
+w = Whisper()
+w.set_dir("./out")                       # dossier de sortie des out_<id>.csv (créé si absent)
+w.set_seek(42)                           # graine de reproductibilité (facultatif)
+w.load_aircraft("aircraft.xml")          # définition avion (XML)
+w.set_trim_condition(TrimCondition(altitude_m=3000, speed_mps=120, mass_kg=18000))
+w.set_trim_param(TrimParam(max_iterations=50))
+
+w.run_trim()                             # écrit out_1.csv dans ./out
+w.run_trim()                             # écrit out_2.csv (id = index d'appel sur l'instance)
+w.run_trim(save_data=False)              # calcule sans écrire de fichier
+```
+
+`run_trim` lève une `RuntimeError` explicite si `load_aircraft`/`set_trim_condition`/`set_trim_param` n'ont pas été appelés au préalable. Le solveur de trim lui-même (`Whisper._solve_trim`) est un **stub** (calcul pseudo-aléatoire mais reproductible via `set_seek`) — à remplacer par le vrai calcul.
+
+Tester : `python -m whisper` (démo autonome, aucune dépendance) ou `docker build -t whisper tools/whisper && docker run --rm whisper`.
+
 ## Structure du projet
 
 ```
 tools/tool_ingest/   tools/tool_enrich/   tools/tool_score/
     Dockerfile, pyproject.toml, <package>/{__init__,logic,definitions}.py
+tools/whisper/         # outil autonome (voir section Whisper ci-dessus)
+    Dockerfile, pyproject.toml, whisper/{__init__,core,trim,__main__}.py, examples/
 orchestrator/         # image webserver+daemon (aucune dépendance "outil")
 workspace.yaml         # docker-compose : pointe vers les 3 serveurs gRPC
 dagster.yaml            # instance docker-compose (sqlite, run launcher par défaut)
