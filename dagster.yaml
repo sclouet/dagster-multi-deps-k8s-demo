@@ -1,0 +1,13 @@
+# Config d'instance pour le palier docker-compose.
+# run_storage / event_log_storage / schedule_storage : non specifies ->
+# Dagster utilise le sqlite par defaut sous $DAGSTER_HOME (webserver et
+# daemon partagent le meme volume dagster_home, comme le fait `dagster dev`
+# en local). C'est suffisant pour une demo ; en k8s c'est le chart Helm qui
+# bascule vers Postgres (voir k8s/dagster-instance-values.yaml).
+
+run_launcher:
+  module: dagster.core.launcher
+  class: DefaultRunLauncher
+
+telemetry:
+  enabled: false

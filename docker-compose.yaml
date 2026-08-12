@@ -1,0 +1,127 @@
+x-s3-env: &s3_env
+  DAGSTER_S3_ENDPOINT: http://minio:9000
+  DAGSTER_S3_ACCESS_KEY: dagster
+  DAGSTER_S3_SECRET_KEY: dagster123
+  DAGSTER_S3_BUCKET: dagster-demo
+
+# DAGSTER_HOME partage : le DefaultRunLauncher execute chaque run DANS le
+# serveur gRPC de sa code location, qui doit donc voir le meme stockage
+# d'instance (runs/event log) que le webserver/daemon pour pouvoir le faire.
+
+services:
+  # Stockage partage (S3-compatible) entre les 3 code locations : c'est ce
+  # qui permet a des conteneurs/environnements Python differents et
+  # incompatibles de se passer des donnees sans jamais s'importer entre eux.
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: dagster
+      MINIO_ROOT_PASSWORD: dagster123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 dagster dagster123 &&
+      mc mb -p local/dagster-demo &&
+      exit 0
+      "
+
+  # --- Les 3 outils : chacun sa propre image, ses propres dependances ---
+
+  tool_ingest:
+    build:
+      context: ./tools/tool_ingest
+    environment:
+      <<: *s3_env
+      DAGSTER_HOME: /dagster_home
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  tool_enrich:
+    build:
+      context: ./tools/tool_enrich
+    environment:
+      <<: *s3_env
+      DAGSTER_HOME: /dagster_home
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  tool_score:
+    build:
+      context: ./tools/tool_score
+    environment:
+      <<: *s3_env
+      DAGSTER_HOME: /dagster_home
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  # --- Orchestrateur central : ne connait aucune dependance "outil" ---
+
+  dagster-webserver:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    # Copie dagster.yaml dans le volume partage (idempotent, cp -n) avant de
+    # demarrer : evite de baker l'instance config dans une image differente
+    # de celle du daemon/des outils.
+    command:
+      - /bin/sh
+      - -c
+      - >
+        mkdir -p /dagster_home &&
+        cp -n /app/dagster.yaml /dagster_home/dagster.yaml ;
+        dagster-webserver -h 0.0.0.0 -p 3000 -w /app/workspace.yaml
+    ports:
+      - "3000:3000"
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      - tool_ingest
+      - tool_enrich
+      - tool_score
+
+  dagster-daemon:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    command:
+      - /bin/sh
+      - -c
+      - >
+        mkdir -p /dagster_home &&
+        cp -n /app/dagster.yaml /dagster_home/dagster.yaml ;
+        dagster-daemon run
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      - tool_ingest
+      - tool_enrich
+      - tool_score
+
+volumes:
+  minio_data:
+  dagster_home:

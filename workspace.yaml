@@ -1,0 +1,20 @@
+# Workspace pour le webserver/daemon central (docker-compose).
+# Chaque entree pointe vers le serveur gRPC d'un outil isole
+# (nom de service docker-compose = nom d'hote resolu par le reseau compose).
+# En Kubernetes, l'equivalent est genere automatiquement par le chart
+# dagster-user-deployments a partir de k8s/helm-values.yaml.
+load_from:
+  - grpc_server:
+      host: tool_ingest
+      port: 4000
+      location_name: tool_ingest
+
+  - grpc_server:
+      host: tool_enrich
+      port: 4000
+      location_name: tool_enrich
+
+  - grpc_server:
+      host: tool_score
+      port: 4000
+      location_name: tool_score

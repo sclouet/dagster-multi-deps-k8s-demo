@@ -1,0 +1,19 @@
+[project]
+name = "tool-score"
+version = "0.1.0"
+description = "Outil de scoring - stack ML legacy (numpy 1.23.5, scikit-learn 1.0.2) - code location Dagster isolee"
+requires-python = ">=3.9,<3.10"
+dependencies = [
+    "numpy==1.23.5",
+    "scikit-learn==1.0.2",
+    "pandas==1.5.3",
+    "dagster==1.8.13",
+    "dagster-aws==0.24.13",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["tool_score*"]

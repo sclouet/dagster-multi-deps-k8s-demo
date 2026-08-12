@@ -1,0 +1,32 @@
+# Reglages complementaires pour un cluster local mono-noeud (minikube/kind),
+# a fusionner avec k8s/helm-values.yaml (voir commande dans ce fichier).
+#
+# - imagePullPolicy: IfNotPresent partout, pour utiliser les images
+#   construites/chargees localement (scripts/build-images.ps1) sans
+#   necessiter de registre distant.
+# - runLauncher: K8sRunLauncher (deja la valeur par defaut du chart) rendu
+#   explicite ici : chaque run Dagster demarre son propre Job Kubernetes en
+#   reutilisant l'image de sa code location, donc avec les memes
+#   dependances isolees que le serveur gRPC qui l'a declare.
+#
+# A verifier/adapter selon la version du chart installee
+# (`helm show values dagster/dagster`).
+
+runLauncher:
+  type: K8sRunLauncher
+  config:
+    k8sRunLauncher:
+      jobNamespace: "default"
+      imagePullPolicy: IfNotPresent
+
+dagsterWebserver:
+  image:
+    pullPolicy: IfNotPresent
+
+dagsterDaemon:
+  image:
+    pullPolicy: IfNotPresent
+
+postgresql:
+  image:
+    pullPolicy: IfNotPresent

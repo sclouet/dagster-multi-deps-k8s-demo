@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Dagster
+dagster_home/
+storage/
+.dagster/
+
+# Docker / k8s local
+.env
+
+# OS
+.DS_Store
+Thumbs.db
