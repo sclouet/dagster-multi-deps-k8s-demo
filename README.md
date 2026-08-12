@@ -73,6 +73,7 @@ w.run_trim(save_data=False)              # calcule sans écrire de fichier
 Tester :
 - `python -m whisper` (démo autonome, génère son propre avion XML temporaire)
 - `python tools/whisper/examples/example_usage.py` (script d'exemple pas à pas : instancie `Whisper`, appelle `set_dir`, `set_seek`, `load_aircraft`, `set_trim_condition`, `set_trim_param`, `run_trim`, avec `tools/whisper/examples/aircraft_example.xml`)
+- `python tools/whisper/examples/example_sweep.py` (même principe, mais boucle sur l'altitude, la vitesse et la masse au décollage — un `run_trim()` par combinaison, donc `out_1.csv` … `out_27.csv`)
 - ou `docker build -t whisper tools/whisper && docker run --rm whisper`
 
 ## Structure du projet
