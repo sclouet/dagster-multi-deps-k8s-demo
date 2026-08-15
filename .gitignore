@@ -17,6 +17,7 @@ storage/
 # Whisper - sortie generee par les scripts d'exemple
 tools/whisper/examples/out/
 tools/whisper/examples/out_dagster/
+tools/whisper/examples/shared/
 
 # OS
 .DS_Store

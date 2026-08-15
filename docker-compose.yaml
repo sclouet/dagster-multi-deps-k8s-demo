@@ -102,7 +102,8 @@ services:
       - dagster-daemon
 
   # Deux instances Whisper, chacune dans son propre container temporaire,
-  # qui echangent des donnees via un volume Docker partage (whisper_shared) :
+  # qui echangent des donnees via un dossier partage (bind mount vers
+  # tools/whisper/examples/shared/, directement consultable sur l'hote) :
   # le producteur ecrit out_1.csv, le consommateur le lit et l'utilise comme
   # base pour son propre calcul (voir examples/example_producer.py /
   # example_consumer.py).
@@ -111,14 +112,14 @@ services:
       context: ./tools/whisper
     command: ["python", "examples/example_producer.py"]
     volumes:
-      - whisper_shared:/shared
+      - ./tools/whisper/examples/shared:/shared
 
   whisper-consumer:
     build:
       context: ./tools/whisper
     command: ["python", "examples/example_consumer.py"]
     volumes:
-      - whisper_shared:/shared
+      - ./tools/whisper/examples/shared:/shared
     depends_on:
       whisper-producer:
         condition: service_completed_successfully
@@ -169,4 +170,3 @@ services:
 volumes:
   minio_data:
   dagster_home:
-  whisper_shared:

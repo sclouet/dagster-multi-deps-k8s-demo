@@ -96,14 +96,16 @@ Puis ouvrir http://localhost:3000/runs : le run `whisper_sweep_job` y apparaît 
 
 ### Deux containers Whisper qui échangent des données
 
-`example_producer.py` / `example_consumer.py` montrent deux instances `Whisper` **distinctes** (chacune dans son propre container **temporaire**, donc son propre process — pas de mémoire partagée) qui échangent des données via un **volume Docker partagé** (`whisper_shared`, monté sur `/shared` dans les deux) :
+`example_producer.py` / `example_consumer.py` montrent deux instances `Whisper` **distinctes** (chacune dans son propre container **temporaire**, donc son propre process — pas de mémoire partagée) qui échangent des données via un dossier partagé — **bind mount** vers `tools/whisper/examples/shared/` (donc directement visible sur l'hôte, pas un volume Docker nommé opaque) :
 
 ```powershell
 docker compose run --rm whisper-producer   # calcule un trim, ecrit /shared/producer/out_1.csv
 docker compose run --rm whisper-consumer   # lit ce CSV, l'utilise pour SON propre run_trim
 ```
 
-Le consommateur ne recopie pas juste le résultat : il relit `altitude_m`/`speed_mps`/`mass_kg` du CSV du producteur et relance son propre calcul (masse +500 kg), avec sa propre instance `Whisper` (`set_seek(43)`, différent du producteur), et écrit dans son propre sous-dossier (`/shared/consumer/`) pour ne pas écraser le fichier du producteur.
+Les CSV apparaissent dans `tools/whisper/examples/shared/producer/out_1.csv` et `tools/whisper/examples/shared/consumer/out_1.csv` (dossier ignoré par git, régénéré à chaque run).
+
+Le consommateur ne recopie pas juste le résultat : il relit `altitude_m`/`speed_mps`/`mass_kg` du CSV du producteur et relance son propre calcul (masse +500 kg), avec sa propre instance `Whisper` (`set_seek(43)`, différent du producteur), et écrit dans son propre sous-dossier (`shared/consumer/`) pour ne pas écraser le fichier du producteur.
 
 `docker-compose.yaml` déclare `whisper-consumer` dépendant de `whisper-producer` (`condition: service_completed_successfully`) : lancer `docker compose run --rm whisper-consumer` seul, même sur un volume vide, déclenche automatiquement le producteur avant de lire son fichier — testé réellement. Le consommateur attend aussi activement (`time.sleep`, 30s max) le fichier du producteur, au cas où le script serait exécuté hors de cet ordonnancement docker-compose.
 
