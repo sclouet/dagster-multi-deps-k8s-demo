@@ -100,6 +100,8 @@ docker compose run --rm whisper-sweep-dagster
 
 Puis ouvrir http://localhost:3000/runs : le run `whisper_sweep_job` y apparaît (27 steps en succès), aux côtés de `raw_orders`/`enriched_orders_job`/`scored_orders_job`. `Dockerfile.dagster` fige `dagster==1.8.13` (au lieu de la plage `>=1.8,<2` du extra `pyproject.toml`) — cette version **doit** matcher exactement celle du webserver/daemon (`orchestrator/requirements.txt`), car ce conteneur écrit directement dans le même stockage de run partagé ; une version différente risquerait une incompatibilité de schéma.
 
+Les 27 `out_1.csv` (voir `run_trim_<i>/`) et les 27 fichiers `logs/` (un par op, chacun sa propre instance `Whisper`) sont montés en bind mount — `tools/whisper/examples/out_dagster/` et `tools/whisper/examples/logs/` (ignorés par git) — donc directement visibles sur l'hôte après le `--rm`, comme pour `whisper-producer`/`whisper-consumer`.
+
 ### Deux containers Whisper qui échangent des données
 
 `example_producer.py` / `example_consumer.py` montrent deux instances `Whisper` **distinctes** (chacune dans son propre container **temporaire**, donc son propre process — pas de mémoire partagée) qui échangent des données via un dossier partagé — **bind mount** vers `tools/whisper/examples/shared/` (donc directement visible sur l'hôte, pas un volume Docker nommé opaque) :

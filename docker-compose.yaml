@@ -97,6 +97,11 @@ services:
       DAGSTER_HOME: /dagster_home
     volumes:
       - dagster_home:/dagster_home
+      # Sans ces deux montages, les CSV et logs (ecrits relatifs au cwd
+      # /app dans le conteneur) sont perdus a la suppression du conteneur
+      # (--rm) - meme piege deja corrige pour whisper-producer/consumer.
+      - ./tools/whisper/examples/out_dagster:/app/examples/out_dagster
+      - ./tools/whisper/examples/logs:/app/logs
     depends_on:
       - dagster-webserver
       - dagster-daemon
