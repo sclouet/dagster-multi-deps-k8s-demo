@@ -70,6 +70,12 @@ w.run_trim(save_data=False)              # calcule sans écrire de fichier
 
 `run_trim` lève une `RuntimeError` explicite si `load_aircraft`/`set_trim_condition`/`set_trim_param` n'ont pas été appelés au préalable. Le solveur de trim lui-même (`Whisper._solve_trim`) est un **stub** (calcul pseudo-aléatoire mais reproductible via `set_seek`) — à remplacer par le vrai calcul.
 
+### Logging
+
+À la création de l'instance (une seule fois, singleton), Whisper ouvre un fichier de log dédié dans `logs/` (créé si absent, relatif au répertoire courant) — nom unique incluant l'heure de création et l'identifiant de l'instance, ex. `logs/whisper_20260816T185444369676_33679acc084642ecab71408566b7c47f.log`. Le constructeur y logue cet identifiant (niveau INFO). Chaque méthode publique logue ensuite en DEBUG son nom et l'heure de l'appel, y compris quand l'appel échoue (le log a lieu avant l'exécution).
+
+**Règle de construction** (voir `whisper/core.py`, décorateur `_log_call`) : toute nouvelle méthode publique ajoutée à `Whisper` doit être décorée avec `@_log_call` pour suivre ce même comportement.
+
 Tester :
 - `python -m whisper` (démo autonome, génère son propre avion XML temporaire)
 - `python tools/whisper/examples/example_usage.py` (script d'exemple pas à pas : instancie `Whisper`, appelle `set_dir`, `set_seek`, `load_aircraft`, `set_trim_condition`, `set_trim_param`, `run_trim`, avec `tools/whisper/examples/aircraft_example.xml`)

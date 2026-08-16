@@ -18,6 +18,7 @@ storage/
 tools/whisper/examples/out/
 tools/whisper/examples/out_dagster/
 tools/whisper/examples/shared/
+tools/whisper/**/logs/
 
 # OS
 .DS_Store
