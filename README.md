@@ -113,7 +113,11 @@ Les CSV apparaissent dans `tools/whisper/examples/shared/producer/out_1.csv` et 
 
 Le consommateur ne recopie pas juste le résultat : il relit `altitude_m`/`speed_mps`/`mass_kg` du CSV du producteur et relance son propre calcul (masse +500 kg), avec sa propre instance `Whisper` (`set_seek(43)`, différent du producteur), et écrit dans son propre sous-dossier (`shared/consumer/`) pour ne pas écraser le fichier du producteur.
 
-`docker-compose.yaml` déclare `whisper-consumer` dépendant de `whisper-producer` (`condition: service_completed_successfully`) : lancer `docker compose run --rm whisper-consumer` seul, même sur un volume vide, déclenche automatiquement le producteur avant de lire son fichier — testé réellement. Le consommateur attend aussi activement (`time.sleep`, 30s max) le fichier du producteur, au cas où le script serait exécuté hors de cet ordonnancement docker-compose.
+`docker-compose.yaml` déclare `whisper-consumer` dépendant de `whisper-producer` (`condition: service_completed_successfully`) : lancer `docker compose run --rm whisper-consumer` seul, même sur un volume vide, déclenche automatiquement le producteur avant de lire son fichier — testé réellement (donc 2 exécutions du producteur si on lance en plus `whisper-producer` explicitement avant). Le consommateur attend aussi activement (`time.sleep`, 30s max) le fichier du producteur, au cas où le script serait exécuté hors de cet ordonnancement docker-compose.
+
+Les fichiers `logs/` (voir section Logging plus haut) de ces deux services sont eux aussi montés en bind mount (`tools/whisper/examples/logs/`, ignoré par git) pour rester consultables sur l'hôte après le `--rm` : chaque exécution (chaque instance `Whisper`, donc chaque container) y laisse son propre fichier, identifiable par son identifiant d'instance.
+
+**Piège vécu** : `whisper`, `whisper-producer`, `whisper-consumer` et `whisper-sweep-dagster` partagent le même `Dockerfile`/contexte de build mais sont des **images docker-compose distinctes** — reconstruire l'une (`docker compose build whisper`) ne reconstruit pas les autres. Après une modification du code de `whisper/`, penser à `docker compose build whisper whisper-producer whisper-consumer whisper-sweep-dagster` (ou `docker compose build` sans argument pour tout reconstruire).
 
 ## Structure du projet
 

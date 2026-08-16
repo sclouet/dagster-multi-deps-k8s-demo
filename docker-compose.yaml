@@ -113,6 +113,9 @@ services:
     command: ["python", "examples/example_producer.py"]
     volumes:
       - ./tools/whisper/examples/shared:/shared
+      # logs/ est relatif au repertoire courant (WORKDIR /app) : monte a
+      # part de /shared pour rester visible sur l'hote apres --rm.
+      - ./tools/whisper/examples/logs:/app/logs
 
   whisper-consumer:
     build:
@@ -120,6 +123,7 @@ services:
     command: ["python", "examples/example_consumer.py"]
     volumes:
       - ./tools/whisper/examples/shared:/shared
+      - ./tools/whisper/examples/logs:/app/logs
     depends_on:
       whisper-producer:
         condition: service_completed_successfully
