@@ -155,6 +155,60 @@ services:
       - ./tools/whisper/examples/exchange:/exchange
       - ./tools/partner_app/logs:/app/logs
 
+  # Meme scenario (Whisper <-> partner_app, 10 echanges), version Dagster
+  # "in-memory" : les tables transitent par le S3PickleIOManager (MinIO),
+  # jamais par fichier. Deux serveurs gRPC PERSISTANTS (comme
+  # tool_ingest/enrich/score) pour que leurs asset sensors soient evalues en
+  # continu par le daemon, chaines dans les deux sens via SourceAsset :
+  #   trim_table (whisper_exchange) -> partner_response_job (partner_app)
+  #   partner_original/random (partner_app) -> verify_response_job (whisper_exchange)
+  whisper-exchange-server:
+    build:
+      context: ./tools/whisper
+      dockerfile: Dockerfile.dagster
+    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "whisper.dagster_defs"]
+    environment:
+      <<: *s3_env
+      DAGSTER_HOME: /dagster_home
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  partner-app-server:
+    build:
+      context: ./tools/partner_app
+      dockerfile: Dockerfile.dagster
+    environment:
+      <<: *s3_env
+      DAGSTER_HOME: /dagster_home
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  # Declenche 10 materialisations de trim_table (via le client GraphQL, sur
+  # le code location whisper_exchange deja deploye) et attend chaque
+  # aller-retour complet. A lancer une fois la stack ci-dessus demarree :
+  #   docker compose up -d
+  #   docker compose run --rm whisper-exchange-dagster
+  whisper-exchange-dagster:
+    build:
+      context: ./tools/whisper
+      dockerfile: Dockerfile.dagster
+    command: ["python", "examples/example_exchange_dagster.py"]
+    environment:
+      DAGSTER_HOME: /dagster_home
+    volumes:
+      - dagster_home:/dagster_home
+    depends_on:
+      - dagster-webserver
+      - dagster-daemon
+      - whisper-exchange-server
+      - partner-app-server
+
   # --- Orchestrateur central : ne connait aucune dependance "outil" ---
 
   dagster-webserver:
@@ -179,6 +233,8 @@ services:
       - tool_ingest
       - tool_enrich
       - tool_score
+      - whisper-exchange-server
+      - partner-app-server
 
   dagster-daemon:
     build:
@@ -197,6 +253,8 @@ services:
       - tool_ingest
       - tool_enrich
       - tool_score
+      - whisper-exchange-server
+      - partner-app-server
 
 volumes:
   minio_data:

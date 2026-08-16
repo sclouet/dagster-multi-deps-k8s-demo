@@ -15,6 +15,15 @@ COPY examples ./examples
 # le webserver/daemon (orchestrator/requirements.txt) puisque ce conteneur
 # ecrit dans le MEME stockage d'instance partage (DAGSTER_HOME) - une
 # version differente risquerait une incompatibilite de schema.
-RUN pip install --no-cache-dir . "dagster==1.8.13"
+# dagster-aws : necessaire a whisper/dagster_defs.py (S3PickleIOManager).
+# dagster-graphql : necessaire au driver examples/example_exchange_dagster.py
+# (declenche des runs sur le code location whisper_exchange deja deploye).
+RUN pip install --no-cache-dir . "dagster==1.8.13" "dagster-aws==0.24.13" "dagster-graphql==1.8.13"
 
+EXPOSE 4000
+
+# Commande par defaut = le driver example_sweep_dagster.py (comportement
+# historique). docker-compose.yaml surcharge cette commande pour exposer
+# whisper.dagster_defs comme serveur gRPC persistant (whisper-exchange-server)
+# ou pour lancer examples/example_exchange_dagster.py (whisper-exchange-dagster).
 CMD ["python", "examples/example_sweep_dagster.py"]

@@ -139,6 +139,27 @@ Contrairement à `whisper-producer`/`whisper-consumer` (enchaînement séquentie
 
 Chaque script tient son propre journal dédié à la séquence d'échange — `logs/exchange_whisper_<timestamp>.log` et `tools/partner_app/logs/exchange_partner_<timestamp>.log` (bind mounts, ignorés par git) — distinct du log d'instance `Whisper` (méthodes `set_*`/`run_trim`), qui continue de s'écrire normalement en parallèle (`logs/whisper_<timestamp>_<id>.log`). Testé réellement : 10/10 échanges réussis, tables « originale » toujours identiques bit-à-bit à l'envoi, tables « random » toujours distinctes.
 
+### Même échange, version Dagster « in-memory » (sans fichiers)
+
+Même scénario (Whisper ↔ `partner_app`, 10 échanges), mais orchestré par Dagster : les tables ne transitent **jamais par un fichier local**, seulement par le `S3PickleIOManager` déjà utilisé par le pipeline principal (`tool_ingest`/`enrich`/`score`, via MinIO). Deux environnements restent isolés (Whisper stdlib-only, `partner_app` avec `numpy`) — **deux code locations Dagster séparées**, `whisper_exchange` (`tools/whisper/whisper/dagster_defs.py`) et `partner_app` (`tools/partner_app/partner_app/dagster_defs.py`), chaînées **dans les deux sens** par `SourceAsset` + `AssetIn` + asset sensors (même pattern que `raw_orders → enriched_orders`, mais aller **et** retour) :
+
+1. `trim_table` (whisper_exchange) — calcule un trim, génère une table de 500 floats, la retourne comme valeur d'asset (chargée/déchargée par Dagster via S3, jamais écrite sur disque par le code applicatif).
+2. Un sensor sur `trim_table` déclenche `partner_response_job` (partner_app), qui produit `partner_original` (copie conforme) et `partner_random` (nouvelles valeurs `numpy`).
+3. Un sensor sur `partner_random` déclenche `verify_response_job` (whisper_exchange), qui vérifie par assertion que `partner_original` correspond bien à `trim_table`.
+
+```powershell
+docker compose up -d
+docker compose run --rm whisper-exchange-dagster
+```
+
+`whisper-exchange-dagster` ne fait que déclencher 10 matérialisations de `trim_table` (via `DagsterGraphQLClient`, comme un clic « Materialize » dans l'UI) sur le code location `whisper_exchange` — déjà déployé en permanence comme `tool_ingest`/`enrich`/`score` (serveurs gRPC persistants `whisper-exchange-server`/`partner-app-server`, ajoutés à `workspace.yaml`). Le reste se déroule via les sensors ; le script attend chaque aller-retour complet avant de déclencher le suivant, en interrogeant directement le run storage de l'instance (`DagsterInstance.get_run_records`). Les deux sensors sont réglés à `minimum_interval_seconds=5` (au lieu des ~30s par défaut) pour que les 10 allers-retours restent rapides.
+
+**Aucun fichier de log dédié ici** : le suivi de l'échange se fait via `context.log` dans chaque asset, visible directement dans l'UI Dagster (http://localhost:3000/runs — chaque échange produit 3 runs : `trim_table_job` → `partner_response_job` → `verify_response_job`). C'est une illustration directe de ce que Dagster apporte par rapport à des scripts + fichiers : observabilité native, sans rien construire soi-même.
+
+Testé réellement de bout en bout : 10/10 échanges réussis (30 runs Dagster, tous `Success`), logs `context.log` cohérents des deux côtés (`Trim calculé` → `Table reçue de Whisper` → `Table random générée avec numpy` → `Réponse vérifiée : table originale conforme`).
+
+**Piège vécu** : le premier essai a échoué (`ConnectionRefusedError` vers `dagster-webserver:3000`) car `docker compose up` avait démarré `whisper-exchange-dagster` avant que le webserver ait fini de charger le workspace — `depends_on` n'attend que le démarrage du conteneur, pas sa disponibilité réseau. Lancer `docker compose up -d` puis `docker compose run --rm whisper-exchange-dagster` séparément (une fois la stack stabilisée) évite ce problème.
+
 ## Structure du projet
 
 ```
@@ -146,14 +167,15 @@ tools/tool_ingest/   tools/tool_enrich/   tools/tool_score/
     Dockerfile, pyproject.toml, <package>/{__init__,logic,definitions}.py
 tools/whisper/         # outil autonome (voir section Whisper ci-dessus)
     Dockerfile, Dockerfile.dagster, pyproject.toml
-    whisper/{__init__,core,trim,__main__}.py
+    whisper/{__init__,core,trim,__main__,dagster_defs}.py
     examples/{aircraft_example.xml, example_usage.py, example_sweep.py,
               example_sweep_dagster.py, example_producer.py, example_consumer.py,
-              example_exchange.py}
+              example_exchange.py, example_exchange_dagster.py}
 tools/partner_app/     # application partenaire, environnement numpy isole
-    Dockerfile, pyproject.toml, partner_app/{__init__,__main__}.py
+    Dockerfile, Dockerfile.dagster, pyproject.toml
+    partner_app/{__init__,__main__,dagster_defs}.py
 orchestrator/         # image webserver+daemon (aucune dépendance "outil")
-workspace.yaml         # docker-compose : pointe vers les 3 serveurs gRPC
+workspace.yaml         # docker-compose : pointe vers les 5 serveurs gRPC
 dagster.yaml            # instance docker-compose (sqlite, run launcher par défaut)
 docker-compose.yaml
 k8s/

@@ -18,3 +18,16 @@ load_from:
       host: tool_score
       port: 4000
       location_name: tool_score
+
+  # Scenario d'echange Whisper <-> partner_app "in-memory" (S3PickleIOManager,
+  # pas de fichiers) - voir tools/whisper/whisper/dagster_defs.py et
+  # tools/partner_app/partner_app/dagster_defs.py.
+  - grpc_server:
+      host: whisper-exchange-server
+      port: 4000
+      location_name: whisper_exchange
+
+  - grpc_server:
+      host: partner-app-server
+      port: 4000
+      location_name: partner_app

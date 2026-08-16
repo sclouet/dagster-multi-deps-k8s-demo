@@ -1,0 +1,21 @@
+# Variante avec Dagster : expose partner_app.dagster_defs comme code
+# location gRPC persistante, pour le scenario d'echange in-memory
+# (S3PickleIOManager) avec whisper_exchange - voir
+# tools/whisper/whisper/dagster_defs.py. Image separee du Dockerfile
+# principal (echange par fichiers, tools/partner_app/partner_app/__main__.py).
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY partner_app ./partner_app
+
+# dagster==1.8.13 fige explicitement : DOIT matcher la version utilisee par
+# le webserver/daemon partages (orchestrator/requirements.txt), puisque ce
+# conteneur ecrit dans le meme stockage d'instance.
+RUN pip install --no-cache-dir . "dagster==1.8.13" "dagster-aws==0.24.13"
+
+EXPOSE 4000
+
+CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", \
+     "-m", "partner_app.dagster_defs"]
