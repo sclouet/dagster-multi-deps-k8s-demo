@@ -1,0 +1,15 @@
+[project]
+name = "partner-app"
+version = "0.1.0"
+description = "Application partenaire de demo - environnement isole (numpy), echange des tables de donnees avec Whisper"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26,<3",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["partner_app*"]

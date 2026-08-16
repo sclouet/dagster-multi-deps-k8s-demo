@@ -133,6 +133,28 @@ services:
       whisper-producer:
         condition: service_completed_successfully
 
+  # Whisper <-> partner_app (tools/partner_app/, environnement numpy isole,
+  # separe de Whisper qui reste stdlib-only) : 10 echanges BIDIRECTIONNELS
+  # via un dossier partage (/exchange), chaque cote attendant l'autre a
+  # chaque etape - donc PAS de depends_on sequentiel ici, les deux services
+  # doivent tourner EN MEME TEMPS :
+  #   docker compose up --build whisper-exchange partner-app
+  whisper-exchange:
+    build:
+      context: ./tools/whisper
+    command: ["python", "examples/example_exchange.py"]
+    volumes:
+      - ./tools/whisper/examples/exchange:/exchange
+      - ./tools/whisper/examples/logs:/app/logs
+      - ./tools/whisper/examples/out:/app/examples/out
+
+  partner-app:
+    build:
+      context: ./tools/partner_app
+    volumes:
+      - ./tools/whisper/examples/exchange:/exchange
+      - ./tools/partner_app/logs:/app/logs
+
   # --- Orchestrateur central : ne connait aucune dependance "outil" ---
 
   dagster-webserver:

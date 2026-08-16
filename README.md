@@ -119,7 +119,25 @@ Le consommateur ne recopie pas juste le résultat : il relit `altitude_m`/`speed
 
 Les fichiers `logs/` (voir section Logging plus haut) de ces deux services sont eux aussi montés en bind mount (`tools/whisper/examples/logs/`, ignoré par git) pour rester consultables sur l'hôte après le `--rm` : chaque exécution (chaque instance `Whisper`, donc chaque container) y laisse son propre fichier, identifiable par son identifiant d'instance.
 
-**Piège vécu** : `whisper`, `whisper-producer`, `whisper-consumer` et `whisper-sweep-dagster` partagent le même `Dockerfile`/contexte de build mais sont des **images docker-compose distinctes** — reconstruire l'une (`docker compose build whisper`) ne reconstruit pas les autres. Après une modification du code de `whisper/`, penser à `docker compose build whisper whisper-producer whisper-consumer whisper-sweep-dagster` (ou `docker compose build` sans argument pour tout reconstruire).
+**Piège vécu** : `whisper`, `whisper-producer`, `whisper-consumer`, `whisper-sweep-dagster` et `whisper-exchange` partagent le même `Dockerfile`/contexte de build mais sont des **images docker-compose distinctes** — reconstruire l'une (`docker compose build whisper`) ne reconstruit pas les autres. Après une modification du code de `whisper/`, penser à reconstruire tous les services concernés (ou `docker compose build` sans argument pour tout reconstruire).
+
+### Whisper ↔ partner_app : échange bidirectionnel entre deux environnements isolés
+
+`tools/partner_app/` est une **seconde application**, dans un environnement Python complètement séparé de Whisper — elle utilise `numpy` (Whisper reste stdlib-only). Les deux ne partagent jamais de process/mémoire : tout passe par un dossier partagé (`/exchange`, bind mount vers `tools/whisper/examples/exchange/`).
+
+Séquence, répétée **10 fois** (`example_exchange.py` côté Whisper, `partner_app/__main__.py` côté partenaire) :
+1. Whisper calcule un trim (`run_trim`) et génère une table de **500 floats aléatoires** (indépendante du résultat physique du trim), qu'il envoie à `partner_app` (`exchange/to_partner/exchange_<i>.csv`).
+2. `partner_app` renvoie **deux** tables : une copie conforme de celle reçue (`exchange_<i>_original.csv`) et une table équivalente à valeurs aléatoires **nouvelles**, générées avec `numpy` (`exchange_<i>_random.csv`).
+3. Whisper reçoit les deux, et vérifie par assertion que la copie « originale » correspond bien à son envoi.
+
+```powershell
+docker compose build whisper-exchange partner-app
+docker compose up whisper-exchange partner-app
+```
+
+Contrairement à `whisper-producer`/`whisper-consumer` (enchaînement séquentiel via `depends_on`), ici les deux services doivent tourner **en même temps** : chaque étape est un aller-retour, donc pas de `depends_on` entre eux — chacun attend l'autre en interrogeant le dossier partagé (`time.sleep`, 60s max). `docker compose up` (sans `-d`) affiche les deux flux de logs entrelacés et se termine de lui-même une fois les 10 échanges finis des deux côtés (deux containers à usage unique, pas des serveurs qui restent up).
+
+Chaque script tient son propre journal dédié à la séquence d'échange — `logs/exchange_whisper_<timestamp>.log` et `tools/partner_app/logs/exchange_partner_<timestamp>.log` (bind mounts, ignorés par git) — distinct du log d'instance `Whisper` (méthodes `set_*`/`run_trim`), qui continue de s'écrire normalement en parallèle (`logs/whisper_<timestamp>_<id>.log`). Testé réellement : 10/10 échanges réussis, tables « originale » toujours identiques bit-à-bit à l'envoi, tables « random » toujours distinctes.
 
 ## Structure du projet
 
@@ -130,7 +148,10 @@ tools/whisper/         # outil autonome (voir section Whisper ci-dessus)
     Dockerfile, Dockerfile.dagster, pyproject.toml
     whisper/{__init__,core,trim,__main__}.py
     examples/{aircraft_example.xml, example_usage.py, example_sweep.py,
-              example_sweep_dagster.py, example_producer.py, example_consumer.py}
+              example_sweep_dagster.py, example_producer.py, example_consumer.py,
+              example_exchange.py}
+tools/partner_app/     # application partenaire, environnement numpy isole
+    Dockerfile, pyproject.toml, partner_app/{__init__,__main__}.py
 orchestrator/         # image webserver+daemon (aucune dépendance "outil")
 workspace.yaml         # docker-compose : pointe vers les 3 serveurs gRPC
 dagster.yaml            # instance docker-compose (sqlite, run launcher par défaut)

@@ -18,7 +18,11 @@ storage/
 tools/whisper/examples/out/
 tools/whisper/examples/out_dagster/
 tools/whisper/examples/shared/
+tools/whisper/examples/exchange/
 tools/whisper/**/logs/
+
+# partner_app - sortie generee
+tools/partner_app/logs/
 
 # OS
 .DS_Store
